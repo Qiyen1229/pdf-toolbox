@@ -1,0 +1,19 @@
+{
+  "name": "pdf-toolbox",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "test": "npm test -w server && npm test -w web",
+    "admin:create": "npm run admin:create -w server --"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

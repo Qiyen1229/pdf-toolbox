@@ -1,0 +1,72 @@
+# PDF 工具箱 — NAS / 伺服器部署
+#   1) cp .env.example .env   並填入所有 CHANGE_ME
+#   2) docker compose up -d --build
+#   3) 初始化管理者（見 README）
+#   → 瀏覽器開啟 http://<NAS-IP>:9133
+#
+# 重要：Safari / iOS「加入主畫面」、Service Worker 與 Secure Cookie 需要 HTTPS。
+#       請在前面放 NAS 內建的反向代理（Synology: 控制台 > 登入入口 > 進階 > 反向代理）
+#       或啟用下方 caddy 服務：  docker compose --profile https up -d
+name: pdf-toolbox
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pdftool
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}
+      POSTGRES_DB: pdftool
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdftool -d pdftool"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+    # 不對外公開 5432
+
+  app:
+    build: .
+    image: pdf-toolbox:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "9133"
+      DATA_DIR: /tmp/data
+      DATABASE_URL: postgres://pdftool:${POSTGRES_PASSWORD:?請在 .env 設定 POSTGRES_PASSWORD}@db:5432/pdftool
+    ports:
+      - "${HOST_PORT:-9133}:9133"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    pids_limit: 512
+    mem_limit: 512m
+    networks: [internal]
+
+  # 選用：自動 HTTPS 反向代理（若要在群暉使用，請優先使用 DSM 內建反向代理伺服器避免 80/443 port 衝突）
+  # caddy:
+  #   profiles: ["https"]
+  #   image: caddy:2-alpine
+  #   restart: unless-stopped
+  #   ports: ["80:80", "443:443"]
+  #   command: caddy reverse-proxy --from ${DOMAIN:-localhost} --to app:9133
+  #   volumes: [caddy_data:/data, caddy_config:/config]
+  #   depends_on: [app]
+  #   networks: [internal]
+
+volumes:
+  pgdata:
+  # caddy_data:
+  # caddy_config:
+
+networks:
+  internal:
+
